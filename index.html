@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="styles.css">
+  <title>Résultats des joueurs</title>
+</head>
+<body>
+  <h1>Résultats des joueurs</h1>
+  <table border="1">
+    <tr>
+      <th>Nom du joueur</th>
+      <th>Club</th>
+      <th>Ligue</th>
+      <th>Prix</th>
+      <th>Comparaison de prix</th>
+      <th>Dernière mise à jour du prix</th>
+    </tr>
+    <!-- Les données des joueurs seront insérées ici -->
+  </table>
+
+  <form action="/scrape" method="post">
+    <label for="links">Collez vos liens (un par ligne) :</label><br>
+    <textarea id="links" name="links" rows="5" cols="50" required></textarea><br>
+    <button type="submit">Lancer le scraping</button>
+  </form>
+
+</body>
+</html>
