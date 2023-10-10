@@ -4,8 +4,30 @@ const cheerio = require('cheerio');
 const XLSX = require('xlsx');
 const bodyParser = require('body-parser');
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
+const linksPerPage = 1000; // Nombre de liens par page
 
+// Dans votre script JavaScript
+async function displayResults() {
+    try {
+      const playerLinks = await scrapeMultiplePages();
+      const resultsDiv = document.getElementById('results');
+  
+      // Affichez les résultats dans la zone d'affichage des résultats
+      playerLinks.forEach((link, index) => {
+        const linkElement = document.createElement('a');
+        linkElement.href = link;
+        linkElement.textContent = link;
+        resultsDiv.appendChild(linkElement);
+      });
+    } catch (error) {
+      console.error("Une erreur s'est produite : ", error);
+    }
+  }
+  
+  // Appelez la fonction pour afficher les résultats
+  displayResults();
+  
 // Définir les entêtes personnalisées dans une variable
 const customHeaders = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
@@ -19,120 +41,212 @@ let playerData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 app.use(bodyParser.urlencoded({ extended: true }));
 
 app.get('/', (req, res) => {
+    const page = req.query.page || 1; // Page par défaut est 1
+    const startIndex = (page - 1) * linksPerPage;
+    const endIndex = startIndex + linksPerPage;
+    const totalLinks = playerData.length;
+    const totalPages = Math.ceil(totalLinks / linksPerPage);
+    const linksToDisplay = playerData.slice(startIndex, endIndex);
     // Générer une page HTML avec un formulaire pour coller les liens
     const html = `
         <!DOCTYPE html>
         <html>
         <head>
-            <title>Résultats des joueurs</title>
+            <title>Ma liste de joueurs</title>
             <style>
             * {
-                background-color: black;
-                color: white
+                max-width: 95%;
+                margin: 0 auto;
             }
-    body {
-        font-family: Arial, sans-serif;
-        background-color: #f7f7f7;
-        color: #333;
-        line-height: 1.6;
-        margin: 0;
-        padding: 0;
-    }
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f7f7f7;
+                color: #333;
+                line-height: 1.6;
+                margin: 0 auto;
+                padding: 0;
+            }
+            .article {
+                display: flex;
+                justify-content: space-between;
+            }
+            .container {
+                margin: 0 auto;
+                padding: 20px;
+                box-shadow: -4px 4px 20px;
+                border-radius: 2rem;
+            }
+            nav {
+                display: flex;
+            }
+            h1 {
+                font-size: 28px;
+                margin-bottom: 20px;
+                color: #333;
+                margin-block: 2rem;
+            }
+        
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+                border: 1px solid #ccc;
+            }
+        
+            th, td {
+                padding: 15px;
+                text-align: center;
+                border: 1px solid #ccc;
+            }
+        
+            th {
+                background-color: #f2f2f2;
+                color: #333;
+            }
+        
+            table tr td img {
+                max-width: 100px;
+                max-height: 100px;
+                display: block;
+                margin: 0 auto;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+        
+            a {
+                text-decoration: none;
+                color: #007bff;
+            }
+        
+            button {
+                background-color: #007bff;
+                color: #fff;
+                border: none;
+                padding: 12px 24px;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+        
+            button:hover {
+                background-color: #0056b3;
+            }
+        
+            form {
+                margin-bottom: 20px;
+            }
+        
+            .negative {
+                color: red;
+                font-weight: bold;
+            }
+        
+            .positive {
+                color: green;
+            }
+        
+            textarea {
+                width: 100%;
+                padding: 15px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                resize: vertical;
+            }            
+            
+nav {
+    color: #000;
+    padding: 20px 0;
+    display: flex;
+    justify-content: right;
+    margin-right: 0px;
+    margin-bottom: 2rem;
+}
 
-    .container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 20px;
-    }
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
 
-    h1 {
-        font-size: 28px;
-        margin-bottom: 20px;
-        color: #fff;
-    }
+li {
+    display: inline;
+    margin-right: 20px;
+}
 
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-bottom: 20px;
-    }
+a {
+    text-decoration: none;
+    color: #000;
+    font-weight: bold;
+    transition: color 0.3s;
+}
 
-    table, th, td {
-        border: .3px solid #fff;
-    }
+a:hover {
+    color: #0056b3; 
+}
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
 
-    th, td {
-        padding: 15px;
-        text-align: center;
-    }
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #444444;
+    min-width: 160px;
+    z-index: 1;
+}
 
-    /* Centrer le contenu des cellules de table avec les images */
-    table tr td {
-        text-align: center;
-    }
+.dropdown:hover .dropdown-content {
+    display: block;
+}
 
-    /* Définir la largeur et la hauteur maximale pour les images */
-    table tr td img {
-        max-width: 100px;
-        max-height: 100px;
-        display: block;
-        margin: 0 auto;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-    }
+.dropdown-content li {
+    padding: 10px;
+}
 
-    th {
-        background-color: #000;
-    }
+.dropdown-content a {
+    color: #fff;
+    text-decoration: none;
+    display: block;
+}
 
-    a {
-        text-decoration: none;
-        color: #007bff;
-    }
+.dropdown-content a:hover {
+    background-color: #a3a1a1;
+}
 
-    button {
-        background-color: #007bff;
-        color: #fff;
-        border: none;
-        padding: 12px 24px;
-        cursor: pointer;
-        border-radius: 4px;
-    }
-
-    button:hover {
-        background-color: #0056b3;
-    }
-
-    form {
-        margin-bottom: 20px;
-    }
-
-    .negative {
-        color: red;
-        font-weight: bold;
-    }
-
-    .positive {
-        color: green;
-    }
-
-    textarea {
-        width: 100%;
-        padding: 15px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        resize: vertical;
-    }
-</style>
+        </style>
         </head>
         <body>
-            <h2>Coller des liens pour obtenir des résultats supplémentaires</h2>
-            <form action="/scrape" method="post">
-                <label for="liens">Collez les liens ici (un par ligne) :</label><br>
-                <textarea id="liens" name="liens" rows="4" cols="50" required></textarea><br>
-                <button type="submit">Scrapez les liens</button>
-            </form>
-
+        <header>
+        <nav>
+            <ul>
+                <li><a href="/">Mes Liens</a></li>
+                <li><a href="/negative_players">Joueurs en Baisse</a></li>
+                <li><a href="/positive_players">Joueurs en Hausse</a></li>
+                <li class="dropdown">
+                    <a href="/fut_mili">Les listes</a>
+                    <ul class="dropdown-content">
+                        <li><a href="/fut_mili">Fut Millionaire</a></li>
+                        <li><a href="low_price">10-20K</a></li>
+                        <li><a href="middle_price">20-35K</a></li>
+                        <li><a href="hight_price">35-50K</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </header>
+        <div class="container">
+        <h2>Coller les liens des joueurs</h2>
+        
+        <form action="/scrape" method="post">
+            <label for="liens">Collez les liens ici (un par ligne) :</label><br>
+            <textarea id="liens" name="liens" rows="4" cols="50" required></textarea><br>
+            <button type="submit">Scrapez les liens</button>
+        </form>
+        <form action="/update" method="post">
+            <button type="submit">Mettre à jour les prix</button>
+        </form>
+        
+    </div>
             <h1>Résultats des joueurs</h1>
             <table border="1">
                 <tr>
@@ -145,9 +259,8 @@ app.get('/', (req, res) => {
                     <th>Ligue</th>
                     <th>Prix</th>
                     <th>Comparaison de prix</th>
-                    <th>Dernière mise à jour du prix</th>
                 </tr>
-                ${playerData.map(player => `
+                ${linksToDisplay.map(player => `
                     <tr>
                         <td>${player['URL']}</td>
                         <td><img src="${player['Image']}" alt="${player['Nom du joueur']}"></td>
@@ -158,22 +271,1436 @@ app.get('/', (req, res) => {
                         <td>${player['Ligue']}</td>
                         <td>${player['Prix'].replace(/,/g, '')}</td>
                         <td class="${parseFloat(player['Comparaison de prix']) < 0 ? 'negative' : 'positive'}">${player['Comparaison de prix']}</td>
-                        <td>${player['Dernière mise à jour du prix']}</td>
                     </tr>
                 `).join('')}
             </table>
+            <div>
+        </div>
 
             <form action="/reset" method="post">
                 <button type="submit">Réinitialiser la liste</button>
             </form>
             <form action="/update" method="post">
-                <button type="submit">Mettre à jour les URL</button>
+                <button type="submit">Mettre à jour les prix</button>
             </form>
         </body>
         </html>
     `;
 
     res.send(html);
+});
+app.get('/negative_players', (req, res) => {
+    // Filtrer les joueurs avec une comparaison de prix négative
+    const negativePlayers = playerData.filter(player => parseFloat(player['Comparaison de prix']) < 0);
+    const page = req.query.page || 5; // Page par défaut est 1
+    const startIndex = (page - 1) * linksPerPage;
+    const endIndex = startIndex + linksPerPage;
+    const totalPlayers = negativePlayers.length;
+    const totalPages = Math.ceil(totalPlayers / linksPerPage);
+    const playersToDisplay = negativePlayers.slice(startIndex, endIndex);
+
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Ma liste de joueurs</title>
+            <style>
+            * {
+                max-width: 95%;
+                margin: 0 auto;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f7f7f7;
+                color: #333;
+                line-height: 1.6;
+                margin: 0 auto;
+                padding: 0;
+            }
+            .article {
+                display: flex;
+                justify-content: space-between;
+            }
+            .container {
+                margin: 0 auto;
+                padding: 20px;
+                box-shadow: -4px 4px 20px;
+                border-radius: 2rem;
+            }
+            nav {
+                display: flex;
+            }
+            h1 {
+                font-size: 28px;
+                margin-bottom: 20px;
+                color: #333;
+                margin-block: 2rem;
+            }
+        
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+                border: 1px solid #ccc;
+            }
+        
+            th, td {
+                padding: 15px;
+                text-align: center;
+                border: 1px solid #ccc;
+            }
+        
+            th {
+                background-color: #f2f2f2;
+                color: #333;
+            }
+        
+            table tr td img {
+                max-width: 100px;
+                max-height: 100px;
+                display: block;
+                margin: 0 auto;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+        
+            a {
+                text-decoration: none;
+                color: #007bff;
+            }
+        
+            button {
+                background-color: #007bff;
+                color: #fff;
+                border: none;
+                padding: 12px 24px;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+        
+            button:hover {
+                background-color: #0056b3;
+            }
+        
+            form {
+                margin-bottom: 20px;
+            }
+        
+            .negative {
+                color: red;
+                font-weight: bold;
+            }
+        
+            .positive {
+                color: green;
+            }
+        
+            textarea {
+                width: 100%;
+                padding: 15px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                resize: vertical;
+            }            
+            
+nav {
+    color: #000;
+    padding: 20px 0;
+    display: flex;
+    justify-content: right;
+    margin-right: 0px;
+    margin-bottom: 2rem;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+li {
+    display: inline;
+    margin-right: 20px;
+}
+
+a {
+    text-decoration: none;
+    color: #000;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+a:hover {
+    color: #0056b3; 
+}
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #444444;
+    min-width: 160px;
+    z-index: 1;
+}
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown-content li {
+    padding: 10px;
+}
+
+.dropdown-content a {
+    color: #fff;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown-content a:hover {
+    background-color: #a3a1a1;
+}
+
+        </style>
+        </head>
+        <body>
+        <header>
+        <nav>
+            <ul>
+                <li><a href="/">Mes Liens</a></li>
+                <li><a href="/negative_players">Joueurs en Baisse</a></li>
+                <li><a href="/positive_players">Joueurs en Hausse</a></li>
+                <li class="dropdown">
+                    <a href="/fut_mili">Les listes</a>
+                    <ul class="dropdown-content">
+                        <li><a href="/fut_mili">Fut Millionaire</a></li>
+                        <li><a href="low_price">10-20K</a></li>
+                        <li><a href="middle_price">20-35K</a></li>
+                        <li><a href="hight_price">35-50K</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </header>
+            </nav>
+            <h1>Résultats des joueurs</h1>
+            <table border="1">
+                <tr>
+                    <th>Url</th>
+                    <th>Image</th>
+                    <th>Nom du joueur</th>
+                    <th>Rating</th>
+                    <th>Position</th>
+                    <th>Club</th>
+                    <th>Ligue</th>
+                    <th>Prix</th>
+                    <th>Comparaison de prix</th>
+                </tr>
+                ${negativePlayers.map(player => `
+                    <tr>
+                        <td>${player['URL']}</td>
+                        <td><img src="${player['Image']}" alt="${player['Nom du joueur']}"></td>
+                        <td>${player['Nom du joueur']}</td>
+                        <td>${player['Rating']}</td> 
+                        <td>${player['Position']}</td>
+                        <td>${player['Club']}</td>
+                        <td>${player['Ligue']}</td>
+                        <td>${player['Prix'].replace(/,/g, '')}</td>
+                        <td class="${parseFloat(player['Comparaison de prix']) < 0 ? 'negative' : 'positive'}">${player['Comparaison de prix']}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            <div>
+        </div>
+        </body>
+        </html>
+    `);
+});
+
+app.get('/fut_mili', (req, res) => {
+    const playersInRange = playerData.filter(player => {
+        const price = parseFloat(player['Prix'].replace(/,/g, ''));
+        return price >= 2500 && price <= 10000;
+    });
+
+    const page = parseInt(req.query.page) || 1; // Extraire le numéro de page de la requête
+    const startIndex = (page - 1) * linksPerPage;
+    const endIndex = startIndex + linksPerPage;
+    const totalPlayers = playersInRange.length;
+    const totalPages = Math.ceil(totalPlayers / linksPerPage);
+    const playersToDisplay = playersInRange.slice(startIndex, endIndex);
+
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <title>Ma liste de joueurs</title>
+        <style>
+        * {
+            max-width: 95%;
+            margin: 0 auto;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f7f7f7;
+            color: #333;
+            line-height: 1.6;
+            margin: 0 auto;
+            padding: 0;
+        }
+        .article {
+            display: flex;
+            justify-content: space-between;
+        }
+        .container {
+            margin: 0 auto;
+            padding: 20px;
+            box-shadow: -4px 4px 20px;
+            border-radius: 2rem;
+        }
+        nav {
+            display: flex;
+        }
+        h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #333;
+            margin-block: 2rem;
+        }
+    
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+        }
+    
+        th, td {
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #ccc;
+        }
+    
+        th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+    
+        table tr td img {
+            max-width: 100px;
+            max-height: 100px;
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+    
+        a {
+            text-decoration: none;
+            color: #007bff;
+        }
+    
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+    
+        button:hover {
+            background-color: #0056b3;
+        }
+    
+        form {
+            margin-bottom: 20px;
+        }
+    
+        .negative {
+            color: red;
+            font-weight: bold;
+        }
+    
+        .positive {
+            color: green;
+        }
+    
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }            
+        
+nav {
+color: #000;
+padding: 20px 0;
+display: flex;
+justify-content: right;
+margin-right: 0px;
+margin-bottom: 2rem;
+}
+
+ul {
+list-style: none;
+padding: 0;
+margin: 0;
+}
+
+li {
+display: inline;
+margin-right: 20px;
+}
+
+a {
+text-decoration: none;
+color: #000;
+font-weight: bold;
+transition: color 0.3s;
+}
+
+a:hover {
+color: #0056b3; 
+}
+.dropdown {
+position: relative;
+display: inline-block;
+}
+
+.dropdown-content {
+display: none;
+position: absolute;
+background-color: #444444;
+min-width: 160px;
+z-index: 1;
+}
+
+.dropdown:hover .dropdown-content {
+display: block;
+}
+
+.dropdown-content li {
+padding: 10px;
+}
+
+.dropdown-content a {
+color: #fff;
+text-decoration: none;
+display: block;
+}
+
+.dropdown-content a:hover {
+background-color: #a3a1a1;
+}
+
+    </style>
+    </head>
+    <body>
+    <header>
+    <nav>
+        <ul>
+            <li><a href="/">Mes Liens</a></li>
+            <li><a href="/negative_players">Joueurs en Baisse</a></li>
+            <li><a href="/positive_players">Joueurs en Hausse</a></li>
+            <li class="dropdown">
+                <a href="/fut_mili">Les listes</a>
+                <ul class="dropdown-content">
+                    <li><a href="/fut_mili">Fut Millionaire</a></li>
+                    <li><a href="low_price">10-20K</a></li>
+                    <li><a href="middle_price">20-35K</a></li>
+                    <li><a href="hight_price">35-50K</a></li>
+                </ul>
+            </li>
+        </ul>
+    </nav>
+</header>
+            <h1>Résultats des joueurs (Prix entre 10250 et 19750)</h1>
+            <table border="1">
+                <tr>
+                    <th>Url</th>
+                    <th>Image</th>
+                    <th>Nom du joueur</th>
+                    <th>Rating</th>
+                    <th>Position</th>
+                    <th>Club</th>
+                    <th>Ligue</th>
+                    <th>Prix</th>
+                    <th>Comparaison de prix</th>
+                </tr>
+                ${playersToDisplay.map(player => `
+                    <tr>
+                        <td>${player['URL']}</td>
+                        <td><img src="${player['Image']}" alt="${player['Nom du joueur']}"></td>
+                        <td>${player['Nom du joueur']}</td>
+                        <td>${player['Rating']}</td> 
+                        <td>${player['Position']}</td>
+                        <td>${player['Club']}</td>
+                        <td>${player['Ligue']}</td>
+                        <td>${player['Prix'].replace(/,/g, '')}</td>
+                        <td class="${parseFloat(player['Comparaison de prix']) < 0 ? 'negative' : 'positive'}">${player['Comparaison de prix']}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            <div>
+        </div>
+        </body>
+        </html>
+    `);
+});
+
+app.get('/positive_players', (req, res) => {
+    // Filtrer les joueurs avec une comparaison de prix positive ou égale à zéro
+    const positivePlayers = playerData.filter(player => parseFloat(player['Comparaison de prix']) >= 0);
+    const page = req.query.page || 1; // Page par défaut est 1
+    const startIndex = (page - 1) * linksPerPage;
+    const endIndex = startIndex + linksPerPage;
+    const totalPlayers = positivePlayers.length;
+    const totalPages = Math.ceil(totalPlayers / linksPerPage);
+    const playersToDisplay = positivePlayers.slice(startIndex, endIndex);
+
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Ma liste de joueurs</title>
+            <style>
+            * {
+                max-width: 95%;
+                margin: 0 auto;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f7f7f7;
+                color: #333;
+                line-height: 1.6;
+                margin: 0 auto;
+                padding: 0;
+            }
+            .article {
+                display: flex;
+                justify-content: space-between;
+            }
+            .container {
+                margin: 0 auto;
+                padding: 20px;
+                box-shadow: -4px 4px 20px;
+                border-radius: 2rem;
+            }
+            nav {
+                display: flex;
+            }
+            h1 {
+                font-size: 28px;
+                margin-bottom: 20px;
+                color: #333;
+                margin-block: 2rem;
+            }
+        
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+                border: 1px solid #ccc;
+            }
+        
+            th, td {
+                padding: 15px;
+                text-align: center;
+                border: 1px solid #ccc;
+            }
+        
+            th {
+                background-color: #f2f2f2;
+                color: #333;
+            }
+        
+            table tr td img {
+                max-width: 100px;
+                max-height: 100px;
+                display: block;
+                margin: 0 auto;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+        
+            a {
+                text-decoration: none;
+                color: #007bff;
+            }
+        
+            button {
+                background-color: #007bff;
+                color: #fff;
+                border: none;
+                padding: 12px 24px;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+        
+            button:hover {
+                background-color: #0056b3;
+            }
+        
+            form {
+                margin-bottom: 20px;
+            }
+        
+            .negative {
+                color: red;
+                font-weight: bold;
+            }
+        
+            .positive {
+                color: green;
+            }
+        
+            textarea {
+                width: 100%;
+                padding: 15px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                resize: vertical;
+            }            
+            
+nav {
+    color: #000;
+    padding: 20px 0;
+    display: flex;
+    justify-content: right;
+    margin-right: 0px;
+    margin-bottom: 2rem;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+li {
+    display: inline;
+    margin-right: 20px;
+}
+
+a {
+    text-decoration: none;
+    color: #000;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+a:hover {
+    color: #0056b3; 
+}
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #444444;
+    min-width: 160px;
+    z-index: 1;
+}
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown-content li {
+    padding: 10px;
+}
+
+.dropdown-content a {
+    color: #fff;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown-content a:hover {
+    background-color: #a3a1a1;
+}
+
+        </style>
+        </head>
+        <body>
+        <header>
+        <nav>
+            <ul>
+                <li><a href="/">Mes Liens</a></li>
+                <li><a href="/negative_players">Joueurs en Baisse</a></li>
+                <li><a href="/positive_players">Joueurs en Hausse</a></li>
+                <li class="dropdown">
+                    <a href="/fut_mili">Les listes</a>
+                    <ul class="dropdown-content">
+                        <li><a href="/fut_mili">Fut Millionaire</a></li>
+                        <li><a href="low_price">10-20K</a></li>
+                        <li><a href="middle_price">20-35K</a></li>
+                        <li><a href="hight_price">35-50K</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </header>
+        <body>
+            <h1>Résultats des joueurs</h1>
+            <table border="1">
+                <tr>
+                    <th>Url</th>
+                    <th>Image</th>
+                    <th>Nom du joueur</th>
+                    <th>Rating</th>
+                    <th>Position</th>
+                    <th>Club</th>
+                    <th>Ligue</th>
+                    <th>Prix</th>
+                    <th>Comparaison de prix</th>
+                </tr>
+                ${playersToDisplay.map(player => `
+                    <tr>
+                        <td>${player['URL']}</td>
+                        <td><img src="${player['Image']}" alt="${player['Nom du joueur']}"></td>
+                        <td>${player['Nom du joueur']}</td>
+                        <td>${player['Rating']}</td> 
+                        <td>${player['Position']}</td>
+                        <td>${player['Club']}</td>
+                        <td>${player['Ligue']}</td>
+                        <td>${player['Prix'].replace(/,/g, '')}</td>
+                        <td class="${parseFloat(player['Comparaison de prix']) < 0 ? 'negative' : 'positive'}">${player['Comparaison de prix']}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            <div>
+        </div>
+
+        </body>
+        </html>
+    `);
+});
+
+app.get('/low_price', (req, res) => {
+    // Filtrer les joueurs avec un prix compris entre 10250 et 19750
+    const playersInRange = playerData.filter(player => {
+        const price = parseFloat(player['Prix'].replace(/,/g, ''));
+        return price >= 10250 && price <= 19750;
+    });
+
+    const page = parseInt(req.query.page) || 1; // Extraire le numéro de page de la requête
+    const startIndex = (page - 1) * linksPerPage;
+    const endIndex = startIndex + linksPerPage;
+    const totalPlayers = playersInRange.length;
+    const totalPages = Math.ceil(totalPlayers / linksPerPage);
+    const playersToDisplay = playersInRange.slice(startIndex, endIndex);
+
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Ma liste de joueurs</title>
+            <style>
+            * {
+                max-width: 95%;
+                margin: 0 auto;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f7f7f7;
+                color: #333;
+                line-height: 1.6;
+                margin: 0 auto;
+                padding: 0;
+            }
+            .article {
+                display: flex;
+                justify-content: space-between;
+            }
+            .container {
+                margin: 0 auto;
+                padding: 20px;
+                box-shadow: -4px 4px 20px;
+                border-radius: 2rem;
+            }
+            nav {
+                display: flex;
+            }
+            h1 {
+                font-size: 28px;
+                margin-bottom: 20px;
+                color: #333;
+                margin-block: 2rem;
+            }
+        
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+                border: 1px solid #ccc;
+            }
+        
+            th, td {
+                padding: 15px;
+                text-align: center;
+                border: 1px solid #ccc;
+            }
+        
+            th {
+                background-color: #f2f2f2;
+                color: #333;
+            }
+        
+            table tr td img {
+                max-width: 100px;
+                max-height: 100px;
+                display: block;
+                margin: 0 auto;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+        
+            a {
+                text-decoration: none;
+                color: #007bff;
+            }
+        
+            button {
+                background-color: #007bff;
+                color: #fff;
+                border: none;
+                padding: 12px 24px;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+        
+            button:hover {
+                background-color: #0056b3;
+            }
+        
+            form {
+                margin-bottom: 20px;
+            }
+        
+            .negative {
+                color: red;
+                font-weight: bold;
+            }
+        
+            .positive {
+                color: green;
+            }
+        
+            textarea {
+                width: 100%;
+                padding: 15px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                resize: vertical;
+            }            
+            
+nav {
+    color: #000;
+    padding: 20px 0;
+    display: flex;
+    justify-content: right;
+    margin-right: 0px;
+    margin-bottom: 2rem;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+li {
+    display: inline;
+    margin-right: 20px;
+}
+
+a {
+    text-decoration: none;
+    color: #000;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+a:hover {
+    color: #0056b3; 
+}
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #444444;
+    min-width: 160px;
+    z-index: 1;
+}
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown-content li {
+    padding: 10px;
+}
+
+.dropdown-content a {
+    color: #fff;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown-content a:hover {
+    background-color: #a3a1a1;
+}
+
+        </style>
+        </head>
+        <body>
+        <header>
+        <nav>
+            <ul>
+                <li><a href="/">Mes Liens</a></li>
+                <li><a href="/negative_players">Joueurs en Baisse</a></li>
+                <li><a href="/positive_players">Joueurs en Hausse</a></li>
+                <li class="dropdown">
+                    <a href="/fut_mili">Les listes</a>
+                    <ul class="dropdown-content">
+                        <li><a href="/fut_mili">Fut Millionaire</a></li>
+                        <li><a href="low_price">10-20K</a></li>
+                        <li><a href="middle_price">20-35K</a></li>
+                        <li><a href="hight_price">35-50K</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </header>
+            <h1>Résultats des joueurs (Prix entre 10250 et 19750)</h1>
+            <table border="1">
+                <tr>
+                    <th>Url</th>
+                    <th>Image</th>
+                    <th>Nom du joueur</th>
+                    <th>Rating</th>
+                    <th>Position</th>
+                    <th>Club</th>
+                    <th>Ligue</th>
+                    <th>Prix</th>
+                    <th>Comparaison de prix</th>
+                </tr>
+                ${playersToDisplay.map(player => `
+                    <tr>
+                        <td>${player['URL']}</td>
+                        <td><img src="${player['Image']}" alt="${player['Nom du joueur']}"></td>
+                        <td>${player['Nom du joueur']}</td>
+                        <td>${player['Rating']}</td> 
+                        <td>${player['Position']}</td>
+                        <td>${player['Club']}</td>
+                        <td>${player['Ligue']}</td>
+                        <td>${player['Prix'].replace(/,/g, '')}</td>
+                        <td class="${parseFloat(player['Comparaison de prix']) < 0 ? 'negative' : 'positive'}">${player['Comparaison de prix']}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            <div>
+        </div>
+        </body>
+        </html>
+    `);
+});
+
+app.get('/middle_price', (req, res) => {
+    // Filtrer les joueurs avec un prix compris entre 20000 et 34750
+    const playersInRange = playerData.filter(player => {
+        const price = parseFloat(player['Prix'].replace(/,/g, ''));
+        return price >= 20000 && price <= 34750;
+    });
+
+    const page = parseInt(req.query.page) || 1; // Extraire le numéro de page de la requête
+    const startIndex = (page - 1) * linksPerPage;
+    const endIndex = startIndex + linksPerPage;
+    const totalPlayers = playersInRange.length;
+    const totalPages = Math.ceil(totalPlayers / linksPerPage);
+    const playersToDisplay = playersInRange.slice(startIndex, endIndex);
+
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Ma liste de joueurs</title>
+            <style>
+            * {
+                max-width: 95%;
+                margin: 0 auto;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f7f7f7;
+                color: #333;
+                line-height: 1.6;
+                margin: 0 auto;
+                padding: 0;
+            }
+            .article {
+                display: flex;
+                justify-content: space-between;
+            }
+            .container {
+                margin: 0 auto;
+                padding: 20px;
+                box-shadow: -4px 4px 20px;
+                border-radius: 2rem;
+            }
+            nav {
+                display: flex;
+            }
+            h1 {
+                font-size: 28px;
+                margin-bottom: 20px;
+                color: #333;
+                margin-block: 2rem;
+            }
+        
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+                border: 1px solid #ccc;
+            }
+        
+            th, td {
+                padding: 15px;
+                text-align: center;
+                border: 1px solid #ccc;
+            }
+        
+            th {
+                background-color: #f2f2f2;
+                color: #333;
+            }
+        
+            table tr td img {
+                max-width: 100px;
+                max-height: 100px;
+                display: block;
+                margin: 0 auto;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+        
+            a {
+                text-decoration: none;
+                color: #007bff;
+            }
+        
+            button {
+                background-color: #007bff;
+                color: #fff;
+                border: none;
+                padding: 12px 24px;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+        
+            button:hover {
+                background-color: #0056b3;
+            }
+        
+            form {
+                margin-bottom: 20px;
+            }
+        
+            .negative {
+                color: red;
+                font-weight: bold;
+            }
+        
+            .positive {
+                color: green;
+            }
+        
+            textarea {
+                width: 100%;
+                padding: 15px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                resize: vertical;
+            }            
+            
+nav {
+    color: #000;
+    padding: 20px 0;
+    display: flex;
+    justify-content: right;
+    margin-right: 0px;
+    margin-bottom: 2rem;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+li {
+    display: inline;
+    margin-right: 20px;
+}
+
+a {
+    text-decoration: none;
+    color: #000;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+a:hover {
+    color: #0056b3; 
+}
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #444444;
+    min-width: 160px;
+    z-index: 1;
+}
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown-content li {
+    padding: 10px;
+}
+
+.dropdown-content a {
+    color: #fff;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown-content a:hover {
+    background-color: #a3a1a1;
+}
+
+        </style>
+        </head>
+        <body>
+        <header>
+        <nav>
+            <ul>
+                <li><a href="/">Mes Liens</a></li>
+                <li><a href="/negative_players">Joueurs en Baisse</a></li>
+                <li><a href="/positive_players">Joueurs en Hausse</a></li>
+                <li class="dropdown">
+                    <a href="/fut_mili">Les listes</a>
+                    <ul class="dropdown-content">
+                        <li><a href="/fut_mili">Fut Millionaire</a></li>
+                        <li><a href="low_price">10-20K</a></li>
+                        <li><a href="middle_price">20-35K</a></li>
+                        <li><a href="hight_price">35-50K</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </header>
+            <h1>Résultats des joueurs (Prix entre 10250 et 19750)</h1>
+            <table border="1">
+                <tr>
+                    <th>Url</th>
+                    <th>Image</th>
+                    <th>Nom du joueur</th>
+                    <th>Rating</th>
+                    <th>Position</th>
+                    <th>Club</th>
+                    <th>Ligue</th>
+                    <th>Prix</th>
+                    <th>Comparaison de prix</th>
+                </tr>
+                ${playersToDisplay.map(player => `
+                    <tr>
+                        <td>${player['URL']}</td>
+                        <td><img src="${player['Image']}" alt="${player['Nom du joueur']}"></td>
+                        <td>${player['Nom du joueur']}</td>
+                        <td>${player['Rating']}</td> 
+                        <td>${player['Position']}</td>
+                        <td>${player['Club']}</td>
+                        <td>${player['Ligue']}</td>
+                        <td>${player['Prix'].replace(/,/g, '')}</td>
+                        <td class="${parseFloat(player['Comparaison de prix']) < 0 ? 'negative' : 'positive'}">${player['Comparaison de prix']}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            <div>
+        </div>
+        </body>
+        </html>
+    `);
+});
+
+app.get('/hight_price', (req, res) => {
+    // Filtrer les joueurs avec un prix compris entre 35000 et 50000
+    const playersInRange = playerData.filter(player => {
+        const price = parseFloat(player['Prix'].replace(/,/g, ''));
+        return price >= 35000 && price <= 50000;
+    });
+
+    const page = parseInt(req.query.page) || 1; // Extraire le numéro de page de la requête
+    const startIndex = (page - 1) * linksPerPage;
+    const endIndex = startIndex + linksPerPage;
+    const totalPlayers = playersInRange.length;
+    const totalPages = Math.ceil(totalPlayers / linksPerPage);
+    const playersToDisplay = playersInRange.slice(startIndex, endIndex);
+
+    res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Ma liste de joueurs</title>
+            <style>
+            * {
+                max-width: 95%;
+                margin: 0 auto;
+            }
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f7f7f7;
+                color: #333;
+                line-height: 1.6;
+                margin: 0 auto;
+                padding: 0;
+            }
+            .article {
+                display: flex;
+                justify-content: space-between;
+            }
+            .container {
+                margin: 0 auto;
+                padding: 20px;
+                box-shadow: -4px 4px 20px;
+                border-radius: 2rem;
+            }
+            nav {
+                display: flex;
+            }
+            h1 {
+                font-size: 28px;
+                margin-bottom: 20px;
+                color: #333;
+                margin-block: 2rem;
+            }
+        
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 20px;
+                border: 1px solid #ccc;
+            }
+        
+            th, td {
+                padding: 15px;
+                text-align: center;
+                border: 1px solid #ccc;
+            }
+        
+            th {
+                background-color: #f2f2f2;
+                color: #333;
+            }
+        
+            table tr td img {
+                max-width: 100px;
+                max-height: 100px;
+                display: block;
+                margin: 0 auto;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+        
+            a {
+                text-decoration: none;
+                color: #007bff;
+            }
+        
+            button {
+                background-color: #007bff;
+                color: #fff;
+                border: none;
+                padding: 12px 24px;
+                cursor: pointer;
+                border-radius: 4px;
+            }
+        
+            button:hover {
+                background-color: #0056b3;
+            }
+        
+            form {
+                margin-bottom: 20px;
+            }
+        
+            .negative {
+                color: red;
+                font-weight: bold;
+            }
+        
+            .positive {
+                color: green;
+            }
+        
+            textarea {
+                width: 100%;
+                padding: 15px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                resize: vertical;
+            }            
+            
+nav {
+    color: #000;
+    padding: 20px 0;
+    display: flex;
+    justify-content: right;
+    margin-right: 0px;
+    margin-bottom: 2rem;
+}
+
+ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+li {
+    display: inline;
+    margin-right: 20px;
+}
+
+a {
+    text-decoration: none;
+    color: #000;
+    font-weight: bold;
+    transition: color 0.3s;
+}
+
+a:hover {
+    color: #0056b3; 
+}
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #444444;
+    min-width: 160px;
+    z-index: 1;
+}
+
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+.dropdown-content li {
+    padding: 10px;
+}
+
+.dropdown-content a {
+    color: #fff;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown-content a:hover {
+    background-color: #a3a1a1;
+}
+
+        </style>
+        </head>
+        <body>
+        <header>
+        <nav>
+            <ul>
+                <li><a href="/">Mes Liens</a></li>
+                <li><a href="/negative_players">Joueurs en Baisse</a></li>
+                <li><a href="/positive_players">Joueurs en Hausse</a></li>
+                <li class="dropdown">
+                    <a href="/fut_mili">Les listes</a>
+                    <ul class="dropdown-content">
+                        <li><a href="/fut_mili">Fut Millionaire</a></li>
+                        <li><a href="low_price">10-20K</a></li>
+                        <li><a href="middle_price">20-35K</a></li>
+                        <li><a href="hight_price">35-50K</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </header>
+        <nav>
+            <ul>
+                <li><a href="/">Mes Liens</a></li>
+                <li><a href="/negative_players">Joueurs en Baisse</a></li>
+                <li><a href="/positive_players">Joueurs en Hausse</a></li>
+                <li class="dropdown">
+                    <a href="/fut_mili">Les listes</a>
+                    <ul class="dropdown-content">
+                        <li><a href="low_price">10-20K</a></li>
+                        <li><a href="middle_price">20-35K</a></li>
+                        <li><a href="hight_price">35-50K</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </nav>
+    </header>
+            <h1>Résultats des joueurs (Prix entre 10250 et 19750)</h1>
+            <table border="1">
+                <tr>
+                    <th>Url</th>
+                    <th>Image</th>
+                    <th>Nom du joueur</th>
+                    <th>Rating</th>
+                    <th>Position</th>
+                    <th>Club</th>
+                    <th>Ligue</th>
+                    <th>Prix</th>
+                    <th>Comparaison de prix</th>
+                </tr>
+                ${playersToDisplay.map(player => `
+                    <tr>
+                        <td>${player['URL']}</td>
+                        <td><img src="${player['Image']}" alt="${player['Nom du joueur']}"></td>
+                        <td>${player['Nom du joueur']}</td>
+                        <td>${player['Rating']}</td> 
+                        <td>${player['Position']}</td>
+                        <td>${player['Club']}</td>
+                        <td>${player['Ligue']}</td>
+                        <td>${player['Prix'].replace(/,/g, '')}</td>
+                        <td class="${parseFloat(player['Comparaison de prix']) < 0 ? 'negative' : 'positive'}">${player['Comparaison de prix']}</td>
+                    </tr>
+                `).join('')}
+            </table>
+            <div>
+        </div>
+        </body>
+        </html>
+    `);
 });
 
 app.post('/reset', (req, res) => {
